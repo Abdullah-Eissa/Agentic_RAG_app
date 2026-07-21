@@ -1,1 +1,3 @@
-# Agentic_RAG_app
+# Rag Application
+
+### This is Rag application for question answering.
