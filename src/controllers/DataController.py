@@ -59,6 +59,10 @@ class DataController(BaseController):
         return cleaned_file_name
 
     
+    def generate_chunk_hash(self, chunk_text: str):
+        """Generates a deterministic SHA-256 hex string for a given text chunk."""
+        return hashlib.sha256(chunk_text.encode('utf-8')).hexdigest()
+    
     async def calculate_uploadfile_hash(self, file: UploadFile):
         
         sha256_hash = hashlib.sha256()

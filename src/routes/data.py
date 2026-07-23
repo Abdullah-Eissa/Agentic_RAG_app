@@ -229,7 +229,6 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
         )
         
     for asset_id, file_id in project_files_ids.items():
-        
         # get file content
         file_content = process_controller.get_file_content(file_id=file_id)
         
@@ -251,6 +250,9 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
                     "signal": ResponseSignal.PROCESSING_FAILED.value
                 }
             )
+            
+        # for chunk in file_chunks:
+        #     print(f'chunk: {chunk.page_content}')
         
         file_chunks_records = [
             DataChunk(
@@ -258,7 +260,8 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
                 chunk_metadata=chunk.metadata,
                 chunk_order=i+1,
                 chunk_project_id=project.project_id,
-                chunk_asset_id=asset_id
+                chunk_asset_id=asset_id,
+                chunk_hash=data_controller.generate_chunk_hash(chunk_text=chunk.page_content)
             )
             for i, chunk in enumerate(file_chunks)
         ]
