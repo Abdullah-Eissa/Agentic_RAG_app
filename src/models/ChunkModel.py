@@ -5,6 +5,7 @@ from bson.objectid import ObjectId
 from pymongo import InsertOne
 from sqlalchemy.future import select
 from sqlalchemy import func, delete
+from sqlalchemy.dialects.postgresql import insert
 
 class ChunkModel(BaseDataModel):
 
@@ -33,15 +34,88 @@ class ChunkModel(BaseDataModel):
             chunk = result.scalar_one_or_none()
         return chunk
 
-    async def insert_many_chunks(self, chunks: list, batch_size: int=100):
+    
+    # async def insert_many_chunks(self, chunks: list, batch_size: int=100):
+    #     if not chunks:
+    #         return None
+        
+    #     seen_project_hashes, seen_asset_hashes = set(), set()
+    #     unique_chunks = []
+        
+    #     for chunk in chunks:
+    #         project_key = (chunk.chunk_project_id, chunk.chunk_hash)
+    #         asset_key = (chunk.chunk_asset_id, chunk.chunk_hash)
+            
+    #         if project_key not in seen_project_hashes and asset_key not in seen_asset_hashes:
+    #             seen_project_hashes.add(project_key)
+    #             seen_asset_hashes.add(asset_key)
+    #             unique_chunks.append(chunk)
+        
+    #     if not unique_chunks:
+    #         return None
+
+    #     async with self.db_client() as session:
+    #         async with session.begin():
+    #             for i in range(0, len(unique_chunks), batch_size):
+    #                 batch = unique_chunks[i:i+batch_size]
+    #                 session.add_all(batch)
+    #         await session.commit()
+    #     return len(unique_chunks)
+    
+    
+    async def insert_many_chunks(self, chunks: list[DataChunk], batch_size: int = 100) -> int:
+        if not chunks:
+            return 0
+
+        seen_project_hashes, seen_asset_hashes = set(), set()
+        unique_chunks = []
+
+        for chunk in chunks:
+            project_key = (chunk.chunk_project_id, chunk.chunk_hash)
+            asset_key = (chunk.chunk_asset_id, chunk.chunk_hash)
+
+            if project_key not in seen_project_hashes and asset_key not in seen_asset_hashes:
+                seen_project_hashes.add(project_key)
+                seen_asset_hashes.add(asset_key)
+                unique_chunks.append(chunk)
+
+        if not unique_chunks:
+            return 0
+
+        inserted_count = 0
 
         async with self.db_client() as session:
             async with session.begin():
-                for i in range(0, len(chunks), batch_size):
-                    batch = chunks[i:i+batch_size]
-                    session.add_all(batch)
-            await session.commit()
-        return len(chunks)
+                for i in range(0, len(unique_chunks), batch_size):
+                    batch = unique_chunks[i : i + batch_size]
+                    
+                    values = [
+                        {
+                            "chunk_uuid": c.chunk_uuid,
+                            "chunk_text": c.chunk_text,
+                            "chunk_hash": c.chunk_hash,
+                            "chunk_metadata": c.chunk_metadata,
+                            "chunk_order": c.chunk_order,
+                            "chunk_project_id": c.chunk_project_id,
+                            "chunk_asset_id": c.chunk_asset_id,
+                        }
+                        for c in batch
+                    ]
+
+                    # Target ALL unique constraints on the table (project_id, asset_id, uuid)
+                    stmt = (
+                        insert(DataChunk)
+                        .values(values)
+                        .on_conflict_do_nothing()
+                    )
+
+                    result = await session.execute(stmt)
+                    inserted_count += result.rowcount  # Tracks only newly inserted rows
+
+        return inserted_count
+        
+        
+    
 
     async def delete_chunks_by_project_id(self, project_id: ObjectId):
         async with self.db_client() as session:
@@ -63,3 +137,13 @@ class ChunkModel(BaseDataModel):
             result = await session.execute(stmt)
             records = result.scalars().all()
         return records
+    
+    
+    async def get_project_chunks_total_count(self, chunk_project_id: int):
+        async with self.db_client() as session:
+            stmt = (
+                select(func.count(DataChunk.chunk_id))
+                .where(DataChunk.chunk_project_id == chunk_project_id)
+            )
+            total_count = await session.scalar(stmt)
+            return total_count

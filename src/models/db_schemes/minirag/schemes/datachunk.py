@@ -1,5 +1,5 @@
 from .minirag_base import SQLAlchemyBase
-from sqlalchemy import Column, Integer, DateTime, func, String, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, func, String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import Index
@@ -16,6 +16,7 @@ class DataChunk(SQLAlchemyBase):
     chunk_text = Column(String, nullable=False)
     chunk_metadata = Column(JSONB, nullable=True)
     chunk_order = Column(Integer, nullable=False)
+    chunk_hash = Column(String, nullable=False)
 
     chunk_project_id = Column(Integer, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False)
     chunk_asset_id = Column(Integer, ForeignKey("assets.asset_id"), nullable=False)
@@ -27,8 +28,9 @@ class DataChunk(SQLAlchemyBase):
     asset = relationship("Asset", back_populates="chunks")
 
     __table_args__ = (
-        Index('ix_chunk_project_id', chunk_project_id),
         Index('ix_chunk_asset_id', chunk_asset_id),
+        UniqueConstraint(chunk_project_id, chunk_hash, name='uq_chunk_project_id_chunk_hash'), # no repeated chunks for each project
+        UniqueConstraint(chunk_asset_id, chunk_hash, name='uq_chunk_asset_id_chunk_hash') # no repeated chunks in each asset
     )
 
 class RetrievedDocument(BaseModel):

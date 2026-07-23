@@ -57,15 +57,14 @@ class DataController(BaseController):
         cleaned_file_name = cleaned_file_name.replace(" ", "_")
 
         return cleaned_file_name
+
     
-    
-    async def calculate_uploadfile_hash(self, file: UploadFile, app_settings=None):
+    async def calculate_uploadfile_hash(self, file: UploadFile):
         
         sha256_hash = hashlib.sha256()
-        
         await file.seek(0)
         
-        while chunk := await file.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
+        while chunk := await file.read(self.app_settings.FILE_DEFAULT_CHUNK_SIZE):
             if isinstance(chunk, str):
                 chunk = chunk.encode("utf-8")
             sha256_hash.update(chunk)
@@ -74,41 +73,86 @@ class DataController(BaseController):
         return sha256_hash.hexdigest()
     
     
-    def calculate_local_file_hash(self, file_path: Path, app_settings=None) -> str:
+    async def calculate_local_file_hash(self, file_path: Path):
         """Computes SHA-256 hash for a standard local file on disk."""
+        
+        if file_path is None:
+            return None
+        
         sha256_hash = hashlib.sha256()
         
-        with open(file_path, "rb") as f:
-            while chunk := f.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
+        async with aiofiles.open(Path(file_path), "rb") as f:
+            while chunk := await f.read(self.app_settings.FILE_DEFAULT_CHUNK_SIZE):
                 sha256_hash.update(chunk)
-                
+        
         return sha256_hash.hexdigest()
     
-    # async def calculate_local_file_hash(self, file_path: Path, app_settings=None) -> str:
-    #     """Computes SHA-256 hash for a standard local file on disk."""
-    #     sha256_hash = hashlib.sha256()
+    async def check_duplicate_files(self, project_id, asset_model, uploadfile: UploadFile): # take all project assets
         
-    #     async with aiofiles.open(file_path, "rb") as f:
-    #         while chunk := f.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
-    #             sha256_hash.update(chunk)
-                
-    #     return sha256_hash.hexdigest()
-    
-    async def check_hashes(self, project_id, file: UploadFile, app_settings=None):
+        upload_file_hash = await self.calculate_uploadfile_hash(file=uploadfile)
         
-        upload_file_hash = await self.calculate_uploadfile_hash(file=file, app_settings=app_settings)
-        
-        project_controller = ProjectController()
-    
-        project_path = project_controller.get_project_path(project_id=project_id)
-        
-        # check hashes of all files in the project dir
-        for file_path in Path(project_path).iterdir():
+        # compare the uploaded file hash with all hashes in assets database
+        result = await asset_model.get_asset_by_hash(asset_project_id=project_id, file_hash=upload_file_hash)
             
-            if file_path.is_file():
-                existing_file_hash = self.calculate_local_file_hash(file_path=file_path, app_settings=app_settings)
-                
-                if upload_file_hash == existing_file_hash:
-                    return file_path
+        return result
+    
+    async def sync_assets(self, project_id: int, project_dir: str, asset_model):
+        """ 
+        sync assets table with files folder as the following:
+        1. if file hash not existed in assets table, then delete this file
+        2. if the file hash existed in assets table, but repeated in the folder, then leave only the newest one
+        3. if an asset hash not existed in files folder, then remove this asset
+        """
+        
+        project_dir = Path(project_dir)
+        
+        if not project_dir.exists() or not project_dir.is_dir():
+            return []
+        
+        if next(project_dir.iterdir(), None) is None:
+            await asset_model.delete_project_assets(asset_project_id=project_id)
+            return []
             
-        return None
+        
+        # get all file paths and sort them by date from oldest to newest
+        files_paths = [file_path for file_path in project_dir.iterdir() if file_path.is_file()]
+        files_paths.sort(key=lambda f: f.stat().st_mtime)
+        
+        seen_hashes = {} # hash: file_path
+        deleted_files = []
+        for file_path in files_paths:
+            
+            file_hash = await self.calculate_local_file_hash(file_path=file_path)
+            
+            asset = await asset_model.get_asset_by_hash(asset_project_id=project_id, file_hash=file_hash)
+            
+            if asset is None: # if file hash not existed in assets table, delete it from files folder
+                file_path.unlink(missing_ok=True)
+                deleted_files.append(file_path.name)
+                continue
+            
+            # if file existed in asset table
+            if file_hash in seen_hashes: # oldest file seen before
+                seen_hashes[file_hash].unlink(missing_ok=True)
+                deleted_files.append(seen_hashes[file_hash].name)
+                
+            seen_hashes[file_hash] = file_path # put the newer one
+            
+            # Update asset asset_name and file_path
+            asset = await asset_model.update_asset_object(
+                    asset=asset,
+                    new_asset_name=file_path.name,
+                    new_file_path=str(file_path)
+                )
+        
+        all_project_assets = await asset_model.get_all_project_assets(asset_project_id=project_id)
+        
+        if all_project_assets is not None: # if there is a hash in asset table not in the folder, then remove it
+            asset_hashes = [asset.file_hash for asset in all_project_assets]
+            
+            for asset_file_hash in asset_hashes:
+                
+                if asset_file_hash not in seen_hashes:
+                    await asset_model.delete_asset_by_hash(asset_project_id=project_id, file_hash=asset_file_hash)
+            
+        return deleted_files

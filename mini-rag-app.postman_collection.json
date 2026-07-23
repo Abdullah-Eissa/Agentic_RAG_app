@@ -1,0 +1,304 @@
+{
+  "info": {
+    "_postman_id": "7bed9e0f-73a0-486e-8f39-b452a034f4f5",
+    "name": "mini-rag-app",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "50552143",
+    "_collection_link": "https://go.postman.co/collection/50552143-7bed9e0f-73a0-486e-8f39-b452a034f4f5?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "welcome-request",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api}}/api/v1/",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "upload",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "multipart/form-data",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "files",
+              "type": "file",
+              "uuid": "96ecebf9-6690-4065-9b05-a27d113db243",
+              "src": [
+                "/D:/second_jupyter_folder/Work/Internship/Fixed_Solutions/Main_Task/temp_files/files/mohamed_salah.txt",
+                "/D:/second_jupyter_folder/Work/Internship/Fixed_Solutions/Main_Task/temp_files/files/salah.txt"
+              ]
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/data/upload/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "data",
+            "upload",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "process",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    // \"file_id\": \"qscyqqu78m4n_mohamed_salah.txt\",\r\n    \"chunk_size\": 300,\r\n    \"overlap_size\": 20,\r\n    \"do_reset\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/data/process/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "data",
+            "process",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "nlp_index_push",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"do_reset\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/nlp/index/push/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "nlp",
+            "index",
+            "push",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "nlp_index_info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{api}}/api/v1/nlp/index/info/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "nlp",
+            "index",
+            "info",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "nlp_index_search",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"text\": \"في اي نادي يلعب محمد صلاح؟\",\r\n    \"limit\": 5,\r\n    \"threshold\": 0.1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/nlp/index/search/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "nlp",
+            "index",
+            "search",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "nlp_rag_answer",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"text\": \"In which club does cristiano ronaldo play and also Mohamed Salah?\",\r\n    \"limit\": 2,\r\n    \"threshold\": 0.1,\r\n    \"context_aware_answer\":0,\r\n    \"clear_chat_history\": 1,\r\n    \"cache_do_reset\": 1\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/nlp/index/answer/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "nlp",
+            "index",
+            "answer",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "return_uploaded_files",
+      "protocolProfileBehavior": {
+        "disableBodyPruning": true
+      },
+      "request": {
+        "method": "GET",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": []
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/data/get_uploaded_files/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "data",
+            "get_uploaded_files",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "delete_documents",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n    \"file_ids\": [\"v4oca6wcn6ao_mohamed_salah.txt\", \"oeg4z0l05mjc_salah.txt\"]\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{api}}/api/v1/data/delete_document/1",
+          "host": [
+            "{{api}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "data",
+            "delete_document",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "api",
+      "value": ""
+    }
+  ]
+}

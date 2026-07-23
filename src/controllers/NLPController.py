@@ -201,8 +201,11 @@ class NLPController(BaseController):
             limit=limit,
             threshold=threshold
         )
-        
-        database_text_chunks = [doc.text for doc in retrieved_documents]
+        # added part
+        if retrieved_documents:
+            database_text_chunks = [doc.text for doc in retrieved_documents]
+        else:
+            database_text_chunks = []
     
         data_source_crew_result = await data_source_crew.akickoff(inputs={
                 "query": sub_query,
@@ -301,6 +304,8 @@ class NLPController(BaseController):
             })
                 
             sub_queries = query_planning_crew_result.pydantic.subtasks
+            
+            
             
             data_sources, total_retrieved_documents = [], []
             

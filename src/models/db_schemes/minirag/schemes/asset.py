@@ -1,5 +1,5 @@
 from .minirag_base import SQLAlchemyBase
-from sqlalchemy import Column, Integer, DateTime, func, String, ForeignKey
+from sqlalchemy import Column, Integer, DateTime, func, String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy import Index
@@ -11,6 +11,7 @@ class Asset(SQLAlchemyBase):
 
     asset_id = Column(Integer, primary_key=True, autoincrement=True)
     asset_uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
+    file_hash = Column(String, nullable=False)
 
     asset_type = Column(String, nullable=False)
     asset_name = Column(String, nullable=False)
@@ -27,7 +28,8 @@ class Asset(SQLAlchemyBase):
     chunks = relationship("DataChunk", back_populates="asset")
 
     __table_args__ = (
-        Index('ix_asset_project_id', asset_project_id),
         Index('ix_asset_type', asset_type),
+        UniqueConstraint(asset_project_id, asset_name, name='uq_asset_project_id_name'),
+        UniqueConstraint(asset_project_id, file_hash, name='uq_asset_project_id_hash')
     )
-
+    

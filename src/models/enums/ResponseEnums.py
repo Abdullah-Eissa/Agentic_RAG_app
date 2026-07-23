@@ -24,5 +24,7 @@ class ResponseSignal(Enum):
     ASSET_NOT_FOUND_ERROR = "asset_not_found"
     ASSET_DELETION_SUCCESS = "asset_deletion_success"
     DELETION_ERROR = "deletion_error"
+    ASSET_INTEGRITY_ERROR = "error_while_inserting_asset"
+    NO_FILES_PROVIDED = "No_files_provided"
     
     

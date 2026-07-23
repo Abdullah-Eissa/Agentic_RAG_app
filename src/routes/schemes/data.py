@@ -5,7 +5,7 @@ class ProcessRequest(BaseModel):
     file_id: str = None
     chunk_size: Optional[int] = 100
     overlap_size: Optional[int] = 20
-    do_reset: Optional[int] = 0
+    delete_old_chunks: Optional[int] = 0
 
 
 class DeleteRequest(BaseModel):

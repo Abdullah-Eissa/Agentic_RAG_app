@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, UploadFile, status, Request
+from fastapi import FastAPI, APIRouter, Depends, UploadFile, status, Request, File
 from pathlib import Path
 from fastapi.responses import JSONResponse
 import os
@@ -33,57 +33,91 @@ async def upload_data(request: Request, project_id: str, files: List[UploadFile]
     data_controller = DataController()
     project_controller = ProjectController()
     
-    project_path = project_controller.get_project_path(project_id=project_id)
-    
-    file_ids = []
+    project_dir = project_controller.get_project_path(project_id=project.project_id)
+    deleted_files = await data_controller.sync_assets(project_id=project.project_id, project_dir=project_dir, asset_model=asset_model)
+
+    files = [f for f in files if f.filename and f.size != 0]
+    if not files:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                'signal': ResponseSignal.NO_FILES_PROVIDED.value,
+            }
+        )
+
+    file_ids, already_existed_files = [], []
     for file in files:
         is_valid, result_signal = data_controller.validate_uploaded_file(file=file)
         
         if not is_valid:
             logger.error(f"This file is not valid: {file.filename}")
             continue
+        
+        # check if file object exists in file_path or not
+        check_duplication = await data_controller.check_duplicate_files(
+            project_id=project.project_id,
+            asset_model=asset_model,
+            uploadfile=file
+        )
+        
+        # print(f'\n\nCheck_duplication: {check_duplication}\n\n')
+        if check_duplication: # if there is duplication, skip (continue)
+            already_existed_files.append(file.filename)
+            continue
+        
             
         file_path, file_id = data_controller.generate_unique_filepath(
             orig_file_name=file.filename,
             project_id=project_id
         )
         
-        
-        # check if file object exists in file_path or not
-        check_duplication = await data_controller.check_hashes(project_id=project_id, file=file, app_settings=app_settings)
-        
-        if check_duplication is not None: # there is duplication
-            continue
-            
-
         try:
             async with aiofiles.open(file_path, "wb") as f:
                 while chunk := await file.read(app_settings.FILE_DEFAULT_CHUNK_SIZE):
                     await f.write(chunk)
         except Exception as e:
-            
             logger.error(f"Error while uploading file: {e}")
             continue
             
+        uploaded_file_hash = await data_controller.calculate_local_file_hash(file_path)
         # store the assets into the database
         asset_resource = Asset(
             asset_project_id=project.project_id,
             asset_type=AssetTypeEnum.FILE.value, # check
             asset_name=file_id,
             asset_size=os.path.getsize(file_path),
-            file_path=file_path
+            file_path=file_path,
+            file_hash=uploaded_file_hash
             )
         
         asset_record = await asset_model.create_asset(asset=asset_resource)
+                
+        if asset_record is None:
+            return JSONResponse(
+                        content={
+                            'signal': ResponseSignal.ASSET_INTEGRITY_ERROR.value,
+                        }
+                    )
         
         file_ids.append(str(asset_record.asset_id))
-        
-    return JSONResponse(
-        content={
-            'signal': ResponseSignal.FILE_UPLOAD_SUCCESS.value,
-            'file_ids': file_ids
-        }
-    )
+    
+    if len(already_existed_files) == 0:
+        return JSONResponse(
+            content={
+                'signal': ResponseSignal.FILE_UPLOAD_SUCCESS.value,
+                'file_ids': file_ids,
+                'sync_deleted_files': deleted_files
+            }
+        )
+    else:
+        return JSONResponse(
+                    content={
+                        'signal': ResponseSignal.FILE_UPLOAD_SUCCESS.value,
+                        'file_ids': file_ids,
+                        'files_already_existed': already_existed_files,
+                        'sync_deleted_files': deleted_files
+                    }
+                )
     
     
 @data_router.get('/get_uploaded_files/{project_id}')
@@ -98,6 +132,7 @@ async def get_uploaded_data(request: Request, project_id: str):
             asset_project_id=project.project_id,
             asset_type=AssetTypeEnum.FILE.value
         )
+    
     if len(project_files) == 0:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -123,20 +158,34 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
     
     chunk_size = process_request.chunk_size
     overlap_size = process_request.overlap_size
-    do_reset = process_request.do_reset
+    do_reset = process_request.delete_old_chunks
 
-    
     project_model = await ProjectModel.create_instance(db_client=request.app.db_client)
     project = await project_model.get_project_or_create_one(project_id=project_id)
     asset_model = await AssetModel.create_instance(db_client=request.app.db_client)
+    data_controller = DataController()
+    project_controller = ProjectController()
+    
+    project_dir = project_controller.get_project_path(project_id=project.project_id)
+    
+    deleted_files = await data_controller.sync_assets(project_id=project.project_id, project_dir=project_dir, asset_model=asset_model)
     
     project_files_ids = {}
     
     if process_request.file_id:
-        asset_record = await asset_model.get_asset_record(
-            asset_project_id=project.project_id,
-            asset_name=process_request.file_id
-        )
+        
+        # file_path = project_controller.get_file_path(
+        #     project_id=project.project_id,
+        #     file_id=process_request.file_id
+        # )
+        
+        # file_hash = await data_controller.calculate_local_file_hash(file_path=file_path)
+        # asset_record = await asset_model.get_asset_by_hash(
+        #     asset_project_id=project.project_id,
+        #     file_hash=file_hash
+        # )
+        
+        asset_record = await asset_model.get_asset_record(asset_project_id=project.project_id, asset_name=process_request.file_id)
         
         if asset_record is None:
             return JSONResponse(
@@ -150,7 +199,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
             asset_record.asset_id: asset_record.asset_name
         }
         
-    else:
+    else: # get all files
         project_files = await asset_model.get_all_project_assets(
             asset_project_id=project.project_id,
             asset_type=AssetTypeEnum.FILE.value
@@ -161,7 +210,6 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
             for record in project_files
         }
         
-    
     if len(project_files_ids) == 0:
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -171,14 +219,12 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
         )
         
     process_controller = ProcessController(project_id=project_id)
-
     no_records = 0
     no_files = 0
-
     chunk_model = await ChunkModel.create_instance(db_client=request.app.db_client)
     
     if do_reset:
-        _ = await chunk_model.delete_chunks_by_project_id(
+        _ = await chunk_model.delete_chunks_by_project_id( # delete old chunks of this project
             project_id=project.project_id
         )
         
@@ -194,7 +240,6 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
         # convert them into chunks
         file_chunks = process_controller.process_file_content(
             file_content=file_content,
-            file_id=file_id,
             chunk_size=chunk_size,
             overlap_size=overlap_size
         )
@@ -212,7 +257,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
                 chunk_text=chunk.page_content,
                 chunk_metadata=chunk.metadata,
                 chunk_order=i+1,
-                chunk_project_id=project.project_id, # file_id
+                chunk_project_id=project.project_id,
                 chunk_asset_id=asset_id
             )
             for i, chunk in enumerate(file_chunks)
@@ -221,11 +266,15 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
         no_records += await chunk_model.insert_many_chunks(chunks=file_chunks_records)
         no_files += 1
         
+    
+    total_count_project_chunks = await chunk_model.get_project_chunks_total_count(chunk_project_id=project.project_id)
     return JSONResponse(
         content={
-            'signal': ResponseSignal.PROCESSING_SUCCESS.value,
-            'inserted_chunks': no_records,
-            "processed_files": no_files
+            "signal": ResponseSignal.PROCESSING_SUCCESS.value,
+            "inserted_chunks": no_records,
+            "processed_files": no_files,
+            "total_count_project_chunks": total_count_project_chunks,
+            "sync_deleted_files": deleted_files
         }
     )
     

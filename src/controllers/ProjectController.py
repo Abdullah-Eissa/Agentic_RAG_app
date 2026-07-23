@@ -9,6 +9,8 @@ class ProjectController(BaseController):
         super().__init__()
 
     def get_project_path(self, project_id: str):
+        
+        project_id = str(project_id)
         project_dir = os.path.join(
             self.files_dir,
             project_id
@@ -19,4 +21,15 @@ class ProjectController(BaseController):
 
         return project_dir
 
-    
+    def get_file_path(self, project_id: str, file_id: str):
+        project_dir = self.get_project_path(project_id=project_id)
+        
+        file_path = os.path.join(
+            project_dir,
+            file_id
+        )
+        
+        if not os.path.exists(file_path):
+            return None
+        
+        return file_path
