@@ -88,6 +88,7 @@ async def index_project(request: Request, project_id: str, push_request: PushReq
         }
     )
 
+
 @nlp_router.get("/index/info/{project_id}")
 async def get_project_index_info(request: Request, project_id: str):
     

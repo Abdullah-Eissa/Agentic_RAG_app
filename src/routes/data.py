@@ -243,6 +243,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
             overlap_size=overlap_size
         )
         
+        
         if file_chunks is None or len(file_chunks) == 0:
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
