@@ -123,10 +123,11 @@ class DataController(BaseController):
         files_paths.sort(key=lambda f: f.stat().st_mtime)
         
         seen_hashes = {} # hash: file_path
-        deleted_files = []
+        deleted_files, file_hashes = [], set()
         for file_path in files_paths:
             
             file_hash = await self.calculate_local_file_hash(file_path=file_path)
+            file_hashes.add(file_hash)
             
             asset = await asset_model.get_asset_by_hash(asset_project_id=project_id, file_hash=file_hash)
             
@@ -158,5 +159,13 @@ class DataController(BaseController):
                 
                 if asset_file_hash not in seen_hashes:
                     await asset_model.delete_asset_by_hash(asset_project_id=project_id, file_hash=asset_file_hash)
+        
+        # if all_project_assets is not None: # if there is a hash in asset table not in the folder, then remove it
+        #     asset_hashes = set([asset.file_hash for asset in all_project_assets])
+        #     delete_asset_hashes = asset_hashes - file_hashes
+            
+        #     for asset_file_hash in deleted_files:
+        #         await asset_model.delete_asset_by_hash(asset_project_id=project_id, file_hash=asset_file_hash)
+            
             
         return deleted_files

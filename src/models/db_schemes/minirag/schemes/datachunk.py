@@ -19,7 +19,7 @@ class DataChunk(SQLAlchemyBase):
     chunk_hash = Column(String, nullable=False)
 
     chunk_project_id = Column(Integer, ForeignKey("projects.project_id", ondelete="CASCADE"), nullable=False)
-    chunk_asset_id = Column(Integer, ForeignKey("assets.asset_id"), nullable=False)
+    chunk_asset_id = Column(Integer, ForeignKey("assets.asset_id", ondelete="CASCADE"), nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
@@ -30,7 +30,6 @@ class DataChunk(SQLAlchemyBase):
     __table_args__ = (
         Index('ix_chunk_asset_id', chunk_asset_id),
         UniqueConstraint(chunk_project_id, chunk_hash, name='uq_chunk_project_id_chunk_hash'), # no repeated chunks for each project
-        UniqueConstraint(chunk_asset_id, chunk_hash, name='uq_chunk_asset_id_chunk_hash') # no repeated chunks in each asset
     )
 
 class RetrievedDocument(BaseModel):

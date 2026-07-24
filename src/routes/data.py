@@ -261,7 +261,7 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
                 chunk_order=i+1,
                 chunk_project_id=project.project_id,
                 chunk_asset_id=asset_id,
-                chunk_hash=data_controller.generate_chunk_hash(chunk_text=chunk.page_content)
+                chunk_hash=data_controller.generate_chunk_hash(chunk_text=" ".join(chunk.page_content.split()).strip().lower())
             )
             for i, chunk in enumerate(file_chunks)
         ]
@@ -284,13 +284,17 @@ async def process_endpoint(request: Request, project_id: str, process_request: P
     
 @data_router.delete('/delete_document/{project_id}')
 async def delete_document(request: Request, project_id: str, delete_request: DeleteRequest):
-    file_ids = delete_request.file_ids
     
+    file_ids = delete_request.file_ids
     project_model = await ProjectModel.create_instance(db_client=request.app.db_client)
     asset_model = await AssetModel.create_instance(db_client=request.app.db_client)
-    chunk_model = await ChunkModel.create_instance(db_client=request.app.db_client)
-    
     project = await project_model.get_project_or_create_one(project_id=project_id)
+    
+    data_controller = DataController()
+    project_controller = ProjectController()
+    
+    project_dir = project_controller.get_project_path(project_id=project.project_id)
+    deleted_files = await data_controller.sync_assets(project_id=project.project_id, project_dir=project_dir, asset_model=asset_model)
     
     deleted_files = {
         'file_names': [],
@@ -308,7 +312,7 @@ async def delete_document(request: Request, project_id: str, delete_request: Del
             return JSONResponse(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={
-                    'signal': ResponseSignal.ASSET_NOT_FOUND_ERROR.value
+                    'signal': ResponseSignal.FILE_ID_ERROR.value
                 }
             )        
         
@@ -321,9 +325,7 @@ async def delete_document(request: Request, project_id: str, delete_request: Del
             if os.path.exists(asset_record.file_path):
                 deleted_files['file_paths'].append(asset_record.file_path)
                 os.remove(asset_record.file_path)
-            
-        # Delete the file chunks by asset id
-        # _ = await chunk_model.delete_chunks_by_asset_id(asset_id=asset_record.asset_id)
+
         
     if len(deleted_files['file_names']) > 0:
         return JSONResponse(
